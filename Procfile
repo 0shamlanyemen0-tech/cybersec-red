@@ -1,1 +1,1 @@
-web: python full_bot_server.py
+web: python telegram_bot_controller.py
