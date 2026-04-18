@@ -1,0 +1,201 @@
+/* أنماط واجهة C2 */
+:root {
+    --primary-color: #2c3e50;
+    --secondary-color: #3498db;
+    --success-color: #27ae60;
+    --danger-color: #e74c3c;
+    --warning-color: #f39c12;
+    --dark-bg: #1a1a2e;
+    --terminal-green: #00ff00;
+}
+
+body {
+    background: #f8f9fa;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.terminal {
+    background: var(--dark-bg);
+    color: var(--terminal-green);
+    font-family: 'Courier New', monospace;
+    padding: 15px;
+    border-radius: 10px;
+    height: 400px;
+    overflow-y: auto;
+    border: 2px solid #333;
+}
+
+.terminal-line {
+    margin-bottom: 5px;
+    word-wrap: break-word;
+}
+
+.terminal-prompt {
+    color: var(--secondary-color);
+    font-weight: bold;
+}
+
+.terminal-output {
+    color: #ffffff;
+}
+
+.terminal-error {
+    color: var(--danger-color);
+}
+
+.terminal-success {
+    color: var(--success-color);
+}
+
+.session-card {
+    background: white;
+    border-radius: 10px;
+    padding: 15px;
+    margin-bottom: 15px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    transition: all 0.3s;
+    border-left: 5px solid var(--secondary-color);
+}
+
+.session-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 5px 20px rgba(0,0,0,0.2);
+}
+
+.session-card.active {
+    border-left-color: var(--success-color);
+    background: #f8fff9;
+}
+
+.session-card.inactive {
+    border-left-color: var(--danger-color);
+    background: #fff8f8;
+}
+
+.session-id {
+    font-family: monospace;
+    background: #f1f1f1;
+    padding: 2px 5px;
+    border-radius: 3px;
+    font-size: 12px;
+}
+
+.quick-command {
+    background: var(--primary-color);
+    color: white;
+    padding: 8px 12px;
+    border-radius: 5px;
+    margin: 3px;
+    cursor: pointer;
+    display: inline-block;
+    font-size: 12px;
+    transition: all 0.2s;
+}
+
+.quick-command:hover {
+    background: var(--secondary-color);
+    transform: scale(1.05);
+}
+
+.status-badge {
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: bold;
+}
+
+.status-active {
+    background: var(--success-color);
+    color: white;
+}
+
+.status-inactive {
+    background: var(--danger-color);
+    color: white;
+}
+
+.command-history {
+    max-height: 300px;
+    overflow-y: auto;
+    background: #f8f9fa;
+    border-radius: 5px;
+    padding: 10px;
+}
+
+.command-item {
+    border-bottom: 1px solid #dee2e6;
+    padding: 5px 0;
+    font-size: 12px;
+}
+
+.ws-status {
+    padding: 10px;
+    border-radius: 5px;
+    font-weight: bold;
+    text-align: center;
+}
+
+.ws-connected {
+    background: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+
+.ws-disconnected {
+    background: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
+
+.ws-connecting {
+    background: #fff3cd;
+    color: #856404;
+    border: 1px solid #ffeaa7;
+}
+
+.btn-c2 {
+    background: var(--secondary-color);
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 5px;
+    transition: all 0.3s;
+}
+
+.btn-c2:hover {
+    background: #2980b9;
+    transform: translateY(-2px);
+}
+
+.input-terminal {
+    background: #2c3e50;
+    color: white;
+    border: 1px solid #34495e;
+    border-radius: 5px;
+    padding: 10px;
+    font-family: 'Courier New', monospace;
+}
+
+.input-terminal:focus {
+    outline: none;
+    border-color: var(--secondary-color);
+    box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.3);
+}
+
+/* Scrollbar styling */
+.terminal::-webkit-scrollbar {
+    width: 8px;
+}
+
+.terminal::-webkit-scrollbar-track {
+    background: #2c3e50;
+}
+
+.terminal::-webkit-scrollbar-thumb {
+    background: var(--secondary-color);
+    border-radius: 4px;
+}
+
+.terminal::-webkit-scrollbar-thumb:hover {
+    background: #2980b9;
+}

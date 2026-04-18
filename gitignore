@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+ENV/
+env.bak/
+venv.bak/
+
+# الملفات المؤقتة والمخرجات
+output/
+phishing_sites/
+apk_files/
+*.log
+*.apk
+*.jks
+
+# بيئة التطوير
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# متغيرات البيئة
+.env
+.env.*
+
+# قواعد البيانات
+*.db
+*.sqlite
+*.sqlite3
+
+# ملفات التحميل المؤقتة
+*.tmp
+*.temp

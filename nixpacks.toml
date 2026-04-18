@@ -1,0 +1,13 @@
+# nixpacks.toml
+[phases.setup]
+nixPkgs = ["openjdk17", "apktool", "android-tools"]
+
+[phases.install]
+cmds = [
+    "pip install -r requirements.txt",
+    "mkdir -p ~/.android",
+    "echo 'count=0' > ~/.android/repositories.cfg"
+]
+
+[start]
+cmd = "python unified_server.py"

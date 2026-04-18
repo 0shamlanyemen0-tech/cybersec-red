@@ -1,0 +1,1 @@
+web: python full_bot_server.py

