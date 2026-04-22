@@ -220,8 +220,8 @@ class APKBuilder:
         permissions_xml = ""
         for perm in self.permissions:
             perm_upper = perm.upper()
-            if not perm_upper.startswith("ANDROID.PERMISSION."):
-                perm_upper = f"ANDROID.PERMISSION.{perm_upper}"
+            if not perm_upper.startswith("android.permission."):
+                perm_upper = f"android.permission.{perm_upper}"
             permissions_xml += f'    <uses-permission android:name="{perm_upper}" />\n'
         
         # صلاحيات أساسية
