@@ -1,1 +1,1 @@
-web: python telegram_bot_controller.py
+web: python run.py
