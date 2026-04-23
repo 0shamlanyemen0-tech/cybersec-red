@@ -1,16 +1,18 @@
 # 📁 backend/database.py
 """
-نظام قاعدة بيانات SQLite
+نظام قاعدة بيانات SQLite - UAMS Framework
 """
 
 import sqlite3
 import json
+import os
 from datetime import datetime
 from contextlib import contextmanager
 
 class UAMSDatabase:
-    def __init__(self, db_path='backend/database/uams.db'):
+    def __init__(self, db_path='backend/database/cybersec.db'):
         self.db_path = db_path
+        os.makedirs(os.path.dirname(db_path), exist_ok=True)
         self.init_db()
     
     @contextmanager
